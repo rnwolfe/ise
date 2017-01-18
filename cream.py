@@ -45,6 +45,7 @@ class ERS(object):
         :param verify: Verify SSL cert
         :param disable_warnings: Disable requests warnings
         :param timeout: Query timeout
+        :param proxy: Query proxy
         """
         self.ise_node = ise_node
         self.user_name = ers_user
@@ -88,7 +89,7 @@ class ERS(object):
     @property
     def ise_proxy(self):
         """
-        Return the appropriate ISE proxy, default to using shell env
+        Return the appropriate ISE proxy, default: True (use shell env proxy)
         :return: Python requests 'proxies' dictionary
         """
         if isinstance(self.proxy, bool) and (self.proxy is True):
