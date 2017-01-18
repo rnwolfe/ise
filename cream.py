@@ -7,8 +7,9 @@ requests
 xmltodict
  - https://github.com/martinblech/xmltodict
 
-Version: 0.1.4
+Version: 0.1.4-dev
 """
+import types
 import json
 import os
 import re
@@ -26,9 +27,16 @@ class InvalidMacAddress(Exception):
     def __str__(self):
         return repr(self.value)
 
+class InvalidProxy(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
 
 class ERS(object):
-    def __init__(self, ise_node, ers_user, ers_pass, verify=False, disable_warnings=False, timeout=2):
+    def __init__(self, ise_node, ers_user, ers_pass, verify=False, disable_warnings=False, timeout=2, proxy=True):
         """
         Class to interact with Cisco ISE via the ERS API
         :param ise_node: IP Address of the primary admin ISE node
@@ -48,6 +56,7 @@ class ERS(object):
         self.ise.verify = verify  # http://docs.python-requests.org/en/latest/user/advanced/#ssl-cert-verification
         self.disable_warnings = disable_warnings
         self.timeout = timeout
+        self.proxy = proxy
         self.ise.headers.update({'Connection': 'keep_alive'})
 
         if self.disable_warnings:
@@ -76,6 +85,33 @@ class ERS(object):
         else:
             return False
 
+    @property
+    def ise_proxy(self):
+        """
+        Return the appropriate ISE proxy, default to using shell env
+        :return: Python requests 'proxies' dictionary
+        """
+        if isinstance(self.proxy, bool) and (self.proxy is True):
+            http_proxy = os.environ.get('HTTP_PROXY', None) or os.environ.get('http_proxy', None) or None
+            https_proxy = os.environ.get('HTTPS_PROXY', None) or os.environ.get('https_proxy', None) or None
+        elif (isinstance(self.proxy, bool) and (self.proxy is False)) or isinstance(self.proxy, types.NoneType):
+            http_proxy = None
+            https_proxy = None
+        elif isinstance(self.proxy, str) or isinstance(self.proxy, unicode):
+            if self.proxy:
+                http_proxy = self.proxy
+                https_proxy = self.proxy
+            else:
+                # Handle an empty self.proxy string...
+                http_proxy = None
+                https_proxy = None
+        else:
+            raise InvalidProxy("{0} cannot be parsed as a proxy".format(str(self.proxy)))
+        return {
+                'http': http_proxy,
+                'https': https_proxy,
+            }
+
     def get_endpoint_groups(self):
         """
         Get all endpoint identity groups
@@ -89,7 +125,8 @@ class ERS(object):
 
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.identity.endpointgroup.1.0+xml'})
 
-        resp = self.ise.get('{0}/config/endpointgroup'.format(self.url_base))
+        resp = self.ise.get('{0}/config/endpointgroup'.format(self.url_base), 
+            proxies=self.ise_proxy)
 
         if resp.status_code == 200:
             result['success'] = True
@@ -115,12 +152,12 @@ class ERS(object):
             'error': '',
         }
 
-        resp = self.ise.get('{0}/config/endpointgroup?filter=name.EQ.{1}'.format(self.url_base, group))
+        resp = self.ise.get('{0}/config/endpointgroup?filter=name.EQ.{1}'.format(self.url_base, group), proxies=self.ise_proxy)
         found_group = ERS._to_json(resp.text)
 
         if found_group['ns3:searchResult']['@total'] == '1':
             resp = self.ise.get('{0}/config/endpointgroup/{1}'.format(
-                    self.url_base, found_group['ns3:searchResult']['resources']['resource']['@id']))
+                    self.url_base, found_group['ns3:searchResult']['resources']['resource']['@id']), proxies=self.ise_proxy)
             if resp.status_code == 200:
                 result['success'] = True
                 result['response'] = ERS._to_json(resp.text)['ns4:endpointgroup']
@@ -150,7 +187,8 @@ class ERS(object):
         """
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.identity.endpoint.1.0+xml'})
 
-        resp = self.ise.get('{0}/config/endpoint'.format(self.url_base))
+        resp = self.ise.get('{0}/config/endpoint'.format(self.url_base), 
+            proxies=self.ise_proxy)
 
         result = {
             'success': False,
@@ -201,12 +239,12 @@ class ERS(object):
                 'error': '',
             }
 
-            resp = self.ise.get('{0}/config/endpoint?filter=mac.EQ.{1}'.format(self.url_base, mac_address))
+            resp = self.ise.get('{0}/config/endpoint?filter=mac.EQ.{1}'.format(self.url_base, mac_address), proxies=self.ise_proxy)
             found_endpoint = ERS._to_json(resp.text)
 
             if found_endpoint['ns3:searchResult']['@total'] == '1':
                 resp = self.ise.get('{0}/config/endpoint/{1}'.format(
-                        self.url_base, found_endpoint['ns3:searchResult']['resources']['resource']['@id']))
+                        self.url_base, found_endpoint['ns3:searchResult']['resources']['resource']['@id']), proxies=self.ise_proxy)
                 if resp.status_code == 200:
                     result['success'] = True
                     result['response'] = ERS._to_json(resp.text)['ns4:endpoint']
@@ -242,7 +280,8 @@ class ERS(object):
 
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.identity.identitygroup.1.0+xml'})
 
-        resp = self.ise.get('{0}/config/identitygroup'.format(self.url_base))
+        resp = self.ise.get('{0}/config/identitygroup'.format(self.url_base),
+            proxies=self.ise_proxy)
 
         if resp.status_code == 200:
             result['success'] = True
@@ -268,12 +307,12 @@ class ERS(object):
             'error': '',
         }
 
-        resp = self.ise.get('{0}/config/identitygroup?filter=name.EQ.{1}'.format(self.url_base, group))
+        resp = self.ise.get('{0}/config/identitygroup?filter=name.EQ.{1}'.format(self.url_base, group), proxies=self.ise_proxy)
         found_group = ERS._to_json(resp.text)
 
         if found_group['ns3:searchResult']['@total'] == '1':
             resp = self.ise.get('{0}/config/identitygroup/{1}'.format(
-                    self.url_base, found_group['ns3:searchResult']['resources']['resource']['@id']))
+                    self.url_base, found_group['ns3:searchResult']['resources']['resource']['@id']), proxies=self.ise_proxy)
             if resp.status_code == 200:
                 result['success'] = True
                 result['response'] = ERS._to_json(resp.text)['ns4:identitygroup']
@@ -303,7 +342,8 @@ class ERS(object):
         """
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.identity.internaluser.1.1+xml'})
 
-        resp = self.ise.get('{0}/config/internaluser'.format(self.url_base))
+        resp = self.ise.get('{0}/config/internaluser'.format(self.url_base),
+            proxies=self.ise_proxy)
 
         result = {
             'success': False,
@@ -349,12 +389,12 @@ class ERS(object):
             'error': '',
         }
 
-        resp = self.ise.get('{0}/config/internaluser?filter=name.EQ.{1}'.format(self.url_base, user_id))
+        resp = self.ise.get('{0}/config/internaluser?filter=name.EQ.{1}'.format(self.url_base, user_id), proxies=self.ise_proxy)
         found_user = ERS._to_json(resp.text)
 
         if found_user['ns3:searchResult']['@total'] == '1':
             resp = self.ise.get('{0}/config/internaluser/{1}'.format(
-                    self.url_base, found_user['ns3:searchResult']['resources']['resource']['@id']))
+                    self.url_base, found_user['ns3:searchResult']['resources']['resource']['@id']), proxies=self.ise_proxy)
             if resp.status_code == 200:
                 result['success'] = True
                 result['response'] = ERS._to_json(resp.text)['ns4:internaluser']
@@ -408,7 +448,7 @@ class ERS(object):
         data = open(os.path.join(base_dir, 'xml/user_add.xml'), 'r').read().format(
                 user_id, password, enable, first_name, last_name, email, description, user_group_oid)
 
-        resp = self.ise.post('{0}/config/internaluser'.format(self.url_base), data=data, timeout=self.timeout)
+        resp = self.ise.post('{0}/config/internaluser'.format(self.url_base), data=data, timeout=self.timeout, proxies=self.ise_proxy)
 
         if resp.status_code == 201:
             result['success'] = True
@@ -433,7 +473,7 @@ class ERS(object):
             'error': '',
         }
 
-        resp = self.ise.get('{0}/config/internaluser?filter=name.EQ.{1}'.format(self.url_base, user_id))
+        resp = self.ise.get('{0}/config/internaluser?filter=name.EQ.{1}'.format(self.url_base, user_id), proxies=self.ise_proxy)
         found_user = ERS._to_json(resp.text)
 
         if found_user['ns3:searchResult']['@total'] == '1':
@@ -474,7 +514,7 @@ class ERS(object):
 
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.network.networkdevicegroup.1.0+xml'})
 
-        resp = self.ise.get('{0}/config/networkdevicegroup'.format(self.url_base))
+        resp = self.ise.get('{0}/config/networkdevicegroup'.format(self.url_base), proxies=self.ise_proxy)
 
         if resp.status_code == 200:
             result['success'] = True
@@ -494,7 +534,7 @@ class ERS(object):
         """
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.network.networkdevicegroup.1.0+xml'})
 
-        resp = self.ise.get('{0}/config/networkdevicegroup/{1}'.format(self.url_base, device_group_oid))
+        resp = self.ise.get('{0}/config/networkdevicegroup/{1}'.format(self.url_base, device_group_oid), proxies=self.ise_proxy)
 
         result = {
             'success': False,
@@ -522,7 +562,8 @@ class ERS(object):
         """
         self.ise.headers.update({'Accept': 'application/vnd.com.cisco.ise.network.networkdevice.1.0+xml'})
 
-        resp = self.ise.get('{0}/config/networkdevice'.format(self.url_base))
+        resp = self.ise.get('{0}/config/networkdevice'.format(self.url_base), 
+            proxies=self.ise_proxy)
 
         result = {
             'success': False,
@@ -568,12 +609,12 @@ class ERS(object):
             'error': '',
         }
 
-        resp = self.ise.get('{0}/config/networkdevice?filter=name.EQ.{1}'.format(self.url_base, device))
+        resp = self.ise.get('{0}/config/networkdevice?filter=name.EQ.{1}'.format(self.url_base, device), proxies=self.ise_proxy)
         found_device = ERS._to_json(resp.text)
 
         if found_device['ns3:searchResult']['@total'] == '1':
             resp = self.ise.get('{0}/config/networkdevice/{1}'.format(
-                    self.url_base, found_device['ns3:searchResult']['resources']['resource']['@id']))
+                    self.url_base, found_device['ns3:searchResult']['resources']['resource']['@id']), proxies=self.ise_proxies)
             if resp.status_code == 200:
                 result['success'] = True
                 result['response'] = ERS._to_json(resp.text)['ns4:networkdevice']
@@ -630,7 +671,7 @@ class ERS(object):
             name, ip_address, radius_key, snmp_ro, dev_group, dev_location, dev_type, description, dev_profile
         )
 
-        resp = self.ise.post('{0}/config/networkdevice'.format(self.url_base), data=data, timeout=self.timeout)
+        resp = self.ise.post('{0}/config/networkdevice'.format(self.url_base), data=data, timeout=self.timeout, proxies=self.ise_proxy)
 
         if resp.status_code == 201:
             result['success'] = True
@@ -655,7 +696,7 @@ class ERS(object):
             'error': '',
         }
 
-        resp = self.ise.get('{0}/config/networkdevice?filter=name.EQ.{1}'.format(self.url_base, device))
+        resp = self.ise.get('{0}/config/networkdevice?filter=name.EQ.{1}'.format(self.url_base, device), proxies=self.ise_proxies)
         found_device = ERS._to_json(resp.text)
 
         if found_device['ns3:searchResult']['@total'] == '1':
