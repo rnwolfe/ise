@@ -124,14 +124,36 @@ class ERS(object):
             result['error'] = resp.status_code
             return result
 
-    def get_endpoints(self):
+    def get_endpoints(self,
+                      static_assigment='',
+                      profile_id='',
+                      group_id='',
+                      size='50'
+                    ):
         """
-        Get all endpoints
+        Get endpoints filtered by assigments
+        :param static_assigment: group or profile selection
+
         :return: result dictionary
         """
         self.ise.headers.update({'ACCEPT':'application/json', 'Content-Type':'application/json'})
 
-        resp = self.ise.get('{0}/config/endpoint'.format(self.url_base))
+        if static_assigment == 'group':
+            resp = self.ise.get('{0}/config/endpoint?size={1}&filter=staticGroupAssignment.EQ.true'.format(self.url_base, size))
+            print('{0}/config/endpoint?filter=staticGroupAssignment.EQ.true'.format(self.url_base))
+        elif static_assigment == 'profile':
+            resp = self.ise.get('{0}/config/endpoint?size={1}&filter=staticProfileAssignment.EQ.true'.format(self.url_base, size))
+            print('{0}/config/endpoint?size={1}&filter=staticProfileAssignment.EQ.true'.format(self.url_base))
+        elif profile_id:
+            resp = self.ise.get('{0}/config/endpoint?size={1}&filter=profileId.EQ.{2}'.format(self.url_base, size, profile_id))
+            print('{0}/config/endpoint?filter=profileId.EQ.{1}'.format(self.url_base, profile_id))
+        elif group_id:
+            resp = self.ise.get('{0}/config/endpoint?size={1}&filter=groupId.EQ.{2}'.format(self.url_base, size, group_id))
+            print('{0}/config/endpoint?filter=groupId.EQ.{1}'.format(self.url_base, group_id))
+        else:
+            resp = self.ise.get('{0}/config/endpoint?size={1}'.format(self.url_base, size))
+            print('{0}/config/endpoint'.format(self.url_base))
+
 
         result = {
             'success': False,
