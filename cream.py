@@ -210,6 +210,103 @@ class ERS(object):
                 result['error'] = resp.status_code
                 return result
 
+    def search_endpoints_by_group(self, group_id):
+        """
+        Get all endpoints
+        :return: result dictionary
+        """
+        self.ise.headers.update({'ACCEPT':'application/json', 'Content-Type':'application/json'})
+
+        print('{0}/config/endpoint?filter=identityGroup.EQ.{1}'.format(self.url_base, group_id))
+
+        resp = self.ise.get('{0}/config/endpoint?filter=groupId.EQ.{1}'.format(self.url_base, group_id))
+
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+
+        json_res = resp.json()['SearchResult']
+
+        if resp.status_code == 200 and int(json_res['total']) > 1:
+            result['success'] = True
+            result['response'] = [(i['name'], i['id'])
+                                  for i in json_res['resources']]
+            return result
+
+        elif resp.status_code == 200 and int(json_res['total']) == 1:
+            result['success'] = True
+            result['response'] = [(json_res['resources'][0]['name'],
+                                   json_res['resources'][0]['id'])]
+            return result
+
+        elif resp.status_code == 200 and int(json_res['total']) == 0:
+            result['success'] = True
+            result['response'] = []
+            return result
+
+        else:
+            result['response'] = resp.json()['ERSResponse']['messages'][0]['title']
+            result['error'] = resp.status_code
+            return result
+
+    def list_endpoints_in_group(self, group_id, page=1):
+        """
+        Get all endpoints
+        :return: result dictionary
+        """
+        self.ise.headers.update({'ACCEPT':'application/json', 'Content-Type':'application/json'})
+
+        #print('{0}/config/endpoint?size=100&filter=identityGroup.EQ.{1}&page={2}'.format(self.url_base, group_id, page))
+
+        resp = self.ise.get('{0}/config/endpoint?size=100&filter=groupId.EQ.{1}&page={2}'.format(self.url_base, group_id, page))
+
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+
+        json_res = resp.json()['SearchResult']
+
+        if resp.status_code == 200 and int(json_res['total']) > 100:
+            result['success'] = True
+            result['response'] = [(i['name'])
+                                  for i in json_res['resources']]
+            result['total'] = json_res['total']
+            #result['next'] = True if ('nextPage' in json_res) else False
+            if 'nextPage' in json_res:
+                result['next'] = True
+            else:
+                result['next'] = False
+            return result
+
+        if resp.status_code == 200 and int(json_res['total']) > 1:
+            result['success'] = True
+            result['response'] = [(i['name'])
+                                  for i in json_res['resources']]
+            result['total'] = json_res['total']
+            if 'nextPage' in json_res:
+                result['next'] = True
+            else:
+                result['next'] = False
+            return result
+
+        elif resp.status_code == 200 and int(json_res['total']) == 1:
+            result['success'] = True
+            result['response'] = [(json_res['resources'][0]['name'])]
+            return result
+
+        elif resp.status_code == 200 and int(json_res['total']) == 0:
+            result['success'] = True
+            result['response'] = []
+            return result
+
+        else:
+            result['response'] = resp.json()['ERSResponse']['messages'][0]['title']
+            result['error'] = resp.status_code
+            return result
 
     def add_endpoint(self,
                     name,
