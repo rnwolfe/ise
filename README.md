@@ -1,9 +1,11 @@
 ## ISE
 Python module to manage Cisco ISE via the REST API.
 
+Thus far, I primarily added the ability to [list large amounts of endpoints in a particular endpoint identity group](#get-a-list-of-all-endpoints-in-an-identity-group). This is so I could dump them into a CSV import template to do easy bulk group moves. The ISE GUI makes it difficult to do exports for endpoints spanning multiple pages (I need to do over 19,000). I may add more stuff in the future.
+
 #### History  
-All initial work is done by https://github.com/bobthebutcher and https://github.com/mpenning.  
-I forked from them and updated so it worked with ISE 2.2.x and changed all functions to json calls.  
+All initial work is done by https://github.com/bobthebutcher, https://github.com/mpenning, and https://github.com/falkowich.  
+falkowich forked from them and updated so it worked with ISE 2.2.x and changed all functions to json calls.  
 
 #### Status
 Tested and used in our environment at work. But as usual it's up to you to test thus out in a test environment so everything works as intended.
@@ -34,6 +36,44 @@ sys.path.append('/path/to/ise/')
 ```python
 from ise.cream import ERS
 ise = ERS(ise_node='192.168.0.10', ers_user='ers', ers_pass='supersecret', verify=False, disable_warnings=True)
+```
+
+#### Get a list of all endpoints in an identity group
+This was the main reason I forked this repo. I couldn't export more than 500 endpoint in ISE GUI effectively for bulk endpoint group moves, so I made `list_endpoints_in_group()` to do it. It "partially" supports the paginations in the API; however, you have to loop it in your calling of the function. The function will just return if there is a "nextPage" in the API response. Here's my lazy version:
+
+```python
+done = 0
+page = 1
+
+while done != 1:
+	# At this point you need to get the group_id manually using postman or otherwise, will spruce this up in the future. Shouldn't be hard.
+
+	res = ise.list_endpoints_in_group(group_id='7f1012c0-433e-11e3-9c3f-3440b5a29738', page=page)
+
+
+	for x in res['response']:
+		print(x)
+
+	if res['next']:
+		#print('more coming')
+		page = page + 1
+	else:
+		done = 1
+        
+print('Total endpoints: {0}. Pages: {1}'.format( res['total'], page))
+```
+
+You can then run it and append output to file: `./list.py >> output.txt`.
+
+This dumps results similar to this which you can easily paste into the endpoint import template: 
+```
+F4:30:B9:F5:52:19
+F4:30:B9:F5:52:7B
+F4:30:B9:F5:52:F0
+< snipped >
+F4:CE:46:46:FE:36
+F4:CE:46:47:E5:C8
+Total endpoints: 501. Pages: 6
 ```
 
 #### Methods return a result dictionary
