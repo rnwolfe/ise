@@ -124,6 +124,47 @@ class ERS(object):
             result['error'] = resp.status_code
             return result
 
+    def get_endpoint_group_id(self, group):
+        """
+        Get endpoint identity group details
+        :param group: Name of the identity group
+        :return: result dictionary
+        """
+        self.ise.headers.update({'ACCEPT':'application/json', 'Content-Type':'application/json'})
+
+        result = {
+            'success': False,
+            'response': '',
+            'error': '',
+        }
+
+        resp = self.ise.get('{0}/config/endpointgroup?filter=name.EQ.{1}'.format(self.url_base, group))
+        found_group = resp.json()
+
+        if found_group['SearchResult']['total'] == 1:
+            resp = self.ise.get('{0}/config/endpointgroup/{1}'.format(self.url_base, found_group['SearchResult']['resources'][0]['id']))
+            if resp.status_code == 200:
+                result['success'] = True
+                result['response'] = resp.json()['EndPointGroup']['id']
+                return result
+            elif resp.status_code == 404:
+                result['response'] = '{0} not found'.format(group)
+                result['error'] = resp.status_code
+                return result
+            else:
+                result['response'] = resp.json()['ERSResponse']['messages'][0]['title']
+                result['error'] = resp.status_code
+                return result
+        elif found_group['SearchResult']['total'] == 0:
+            result['response'] = '{0} not found'.format(group)
+            result['error'] = 404
+            return result
+
+        else:
+            result['response'] = '{0} not found'.format(group)
+            result['error'] = resp.status_code
+            return result
+
     def get_endpoints(self):
         """
         Get all endpoints
